@@ -1,15 +1,66 @@
-# LinkGuard Telegram Bot (Node.js + TypeScript + Vercel)
+# LinkGuard Bot
 
-بوت Telegram لفحص أول رابط `http/https` في الرسالة باستخدام مزوّد واحد قابل للتبديل عبر متغير بيئة:
+Serverless Telegram bot to check URLs for safety using threat intelligence APIs.
 
-- الافتراضي: `Google Safe Browsing`
-- بديل: `VirusTotal`
+- Runtime: Node.js 20+
+- Language: TypeScript
+- Deployment target: Vercel
+- Webhook endpoint: `POST /api/telegram/webhook`
+- Default provider: Google Safe Browsing
+- Bot replies: Arabic
 
-المشروع مصمم كـ webhook serverless على Vercel باستخدام endpoint واحد:
+## Overview
 
-- `POST /api/telegram/webhook`
+LinkGuard Bot receives Telegram updates through a webhook, extracts the first `http/https` URL from the message, validates and normalizes it safely, sends it to one active provider, then replies with a verdict in Arabic.
 
-## Folder Structure
+This project is intentionally simple:
+
+- No database
+- No crawling/fetching user URLs
+- Single webhook endpoint
+- One-toggle provider switch using `ACTIVE_PROVIDER`
+
+## Features
+
+- Extracts the first URL from message text/caption.
+- Validates URL format and limits URL length to `2048`.
+- Normalizes domains (IDN to punycode).
+- Blocks sensitive hosts/IPs: `localhost`, `127.0.0.1`, `169.254.169.254`.
+- Best-effort block for private ranges (`10/8`, `172.16/12`, `192.168/16`) when DNS resolves.
+- Provider timeout and retry handling: timeout `12000ms`, retry up to `2` times for transient errors (`429` / `5xx`).
+- In-memory TTL cache (best effort in serverless).
+- In-memory rate limiting (best effort in serverless).
+- Arabic response formatting with verdict labels and reason.
+
+## How It Works
+
+1. Telegram sends update to `/api/telegram/webhook`.
+2. Bot validates optional webhook secret header.
+3. Bot extracts first URL from user message.
+4. URL is validated and normalized safely.
+5. Active provider checks URL reputation.
+6. Bot replies in Arabic with verdict, original URL, normalized URL, provider, short reason, and score (if available).
+
+## Providers
+
+Supported providers:
+
+- `google` (default): Google Safe Browsing v4
+- `virustotal`: VirusTotal v3
+
+Switch provider by changing one env var only:
+
+```env
+ACTIVE_PROVIDER=google
+```
+
+or
+
+```env
+ACTIVE_PROVIDER=virustotal
+```
+
+## Project Structure
 
 ```text
 /api
@@ -33,107 +84,94 @@ README.md
 .env.example
 ```
 
-## Features
-
-- استخراج أول رابط `http/https` من رسالة Telegram.
-- Validate + Normalize للرابط (IDN إلى punycode).
-- حظر:
-  - `localhost`
-  - `127.0.0.1`
-  - `169.254.169.254`
-  - عناوين private (`10/8`, `172.16/12`, `192.168/16`) عند كونها IP مباشر أو عند resolve للنطاق (best effort).
-- لا يتم تحميل محتوى الرابط نهائيًا.
-- مزوّد فحص واحد نشط حسب `ACTIVE_PROVIDER`.
-- timeout افتراضي `12s` + retries حتى محاولتين إضافيتين للأخطاء العابرة (`429/5xx`).
-- in-memory cache TTL + in-memory rate limit (best effort في serverless).
-- ردود عربية بالكامل.
-
 ## Environment Variables
 
-انسخ `.env.example` إلى `.env` واملأ القيم:
+Copy `.env.example` to `.env` and set values:
 
-- `TELEGRAM_BOT_TOKEN`
-- `GOOGLE_SAFE_BROWSING_KEY`
-- `VIRUSTOTAL_API_KEY`
-- `ACTIVE_PROVIDER` (`google` أو `virustotal`) والافتراضي `google`
-- `WEBHOOK_SECRET` (اختياري)
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Yes | - | Telegram bot token from BotFather |
+| `GOOGLE_SAFE_BROWSING_KEY` | Required when `ACTIVE_PROVIDER=google` | - | Google Safe Browsing API key |
+| `VIRUSTOTAL_API_KEY` | Required when `ACTIVE_PROVIDER=virustotal` | - | VirusTotal API key |
+| `ACTIVE_PROVIDER` | No | `google` | `google` or `virustotal` |
+| `WEBHOOK_SECRET` | No | empty | Validates `x-telegram-bot-api-secret-token` header |
+| `REQUEST_TIMEOUT_MS` | No | `12000` | Outbound HTTP timeout |
+| `MAX_RETRIES` | No | `2` | Max transient retries |
+| `CACHE_TTL_MS` | No | `300000` | In-memory cache TTL |
+| `RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate-limit window |
+| `RATE_LIMIT_MAX` | No | `10` | Max requests per window per user/chat |
 
-> إذا أردت التبديل بين Google وVirusTotal: غيّر قيمة واحدة فقط `ACTIVE_PROVIDER`.
-
-## Telegram Bot Setup
-
-1. أنشئ بوت عبر `@BotFather` واحصل على `TELEGRAM_BOT_TOKEN`.
-
-2. اضبط webhook:
-
-```bash
-https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<VERCEL_DOMAIN>/api/telegram/webhook
-```
-
-3. تحقق من webhook:
-
-```bash
-https://api.telegram.org/bot<TOKEN>/getWebhookInfo
-```
-
-### Optional Secret Validation
-
-هذا المشروع يعتمد **Telegram secret token header**:
-
-- Header: `x-telegram-bot-api-secret-token`
-
-إذا ضبطت `WEBHOOK_SECRET`، فعند setWebhook استخدم:
-
-```bash
-https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<VERCEL_DOMAIN>/api/telegram/webhook&secret_token=<WEBHOOK_SECRET>
-```
-
-## Local Run
+## Local Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-سيرفر Vercel المحلي سيكون على:
+Local endpoints:
 
 - `http://localhost:3000/api/health`
 - `http://localhost:3000/api/telegram/webhook`
 
+## Telegram Webhook Setup
+
+1. Create a bot with `@BotFather` and get `TELEGRAM_BOT_TOKEN`.
+2. Set webhook:
+
+```bash
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<VERCEL_DOMAIN>/api/telegram/webhook
+```
+
+3. Check webhook info:
+
+```bash
+https://api.telegram.org/bot<TOKEN>/getWebhookInfo
+```
+
+### Optional Secret Token
+
+This project validates Telegram's secret header:
+
+- Header: `x-telegram-bot-api-secret-token`
+
+If `WEBHOOK_SECRET` is set, register webhook with:
+
+```bash
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<VERCEL_DOMAIN>/api/telegram/webhook&secret_token=<WEBHOOK_SECRET>
+```
+
 ## Deploy to Vercel
 
-1. اربط المشروع بـ Vercel:
+1. Link the project:
 
 ```bash
 npx vercel
 ```
 
-2. أضف Environment Variables في Vercel Project Settings:
-
-- `TELEGRAM_BOT_TOKEN`
-- `GOOGLE_SAFE_BROWSING_KEY`
-- `VIRUSTOTAL_API_KEY`
-- `ACTIVE_PROVIDER`
-- `WEBHOOK_SECRET` (اختياري)
-
-3. نفّذ deploy للإنتاج:
+2. Add environment variables in Vercel project settings.
+3. Deploy production:
 
 ```bash
 npx vercel --prod
 ```
 
-4. بعد الحصول على الدومين النهائي، نفّذ `setWebhook` باستخدام رابط `/api/telegram/webhook`.
+4. Run Telegram `setWebhook` using your production domain.
 
-## Arabic Messages Used
+## API Endpoints
 
-- `/start`:
-  - `أرسل رابطًا (http/https) وسأفحصه وأرجع لك النتيجة.`
-- لا يوجد رابط صالح:
-  - `أرسل رابط صحيح يبدأ بـ http:// أو https://`
-- Rate limit:
-  - `خفّف السرعة 🙂 جرّب بعد دقيقة.`
-- فشل المزود:
-  - `تعذر الفحص حالياً. حاول لاحقاً.`
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/telegram/webhook` | `POST` | Telegram update receiver |
+| `/api/health` | `GET` | Health and status endpoint |
+
+## Arabic Bot Messages
+
+| Case | Message |
+|---|---|
+| `/start` | `أرسل رابطًا (http/https) وسأفحصه وأرجع لك النتيجة.` |
+| No URL | `أرسل رابط صحيح يبدأ بـ http:// أو https://` |
+| Rate limit | `خفّف السرعة 🙂 جرّب بعد دقيقة.` |
+| Provider failure | `تعذر الفحص حالياً. حاول لاحقاً.` |
 
 Verdict labels:
 
@@ -142,50 +180,50 @@ Verdict labels:
 - `MALICIOUS => 🚫 خبيث`
 - `UNKNOWN => ❓ غير معروف`
 
-## Example User Messages and Bot Replies
+## Response Format
 
-1. User:
-   - `/start`
+Each verdict reply includes:
 
-   Bot:
-   - `أرسل رابطًا (http/https) وسأفحصه وأرجع لك النتيجة.`
+- Verdict label
+- Original URL
+- Normalized URL
+- Provider used
+- Short reason
+- Score (if available)
 
-2. User:
-   - `مرحبا`
+Example:
 
-   Bot:
-   - `أرسل رابط صحيح يبدأ بـ http:// أو https://`
+```text
+النتيجة: ✅ آمن
+الرابط الأصلي: https://example.com
+الرابط المعياري: https://example.com/
+المزوّد: Google Safe Browsing
+السبب: لم يتم العثور على تهديدات معروفة.
+الدرجة: 0
+```
 
-3. User:
-   - `افحص هذا: https://example.com`
+## Security Notes
 
-   Bot (مثال SAFE):
-   - `النتيجة: ✅ آمن`
-   - `الرابط الأصلي: https://example.com`
-   - `الرابط المعياري: https://example.com/`
-   - `المزوّد: Google Safe Browsing`
-   - `السبب: لم يتم العثور على تهديدات معروفة.`
-   - `الدرجة: 0`
+- Bot never fetches the user URL content.
+- URL checks are done only via provider APIs.
+- URL host/IP filtering is best effort by design.
+- In-memory cache and rate-limit reset on cold starts/serverless scale-out.
 
-4. User:
-   - `check http://127.0.0.1/admin`
+## Contributing
 
-   Bot (مثال UNKNOWN مع حظر محلي):
-   - `النتيجة: ❓ غير معروف`
-   - `الرابط الأصلي: http://127.0.0.1/admin`
-   - `الرابط المعياري: http://127.0.0.1/admin`
-   - `المزوّد: Google Safe Browsing (تصفية محلية)`
-   - `السبب: الرابط يشير إلى عنوان localhost/loopback غير مسموح.`
-   - `الدرجة: غير متاحة`
+Contributions are welcome.
 
-5. User:
-   - `https://test.example` (مع تجاوز limit)
+1. Fork the repo.
+2. Create a feature branch.
+3. Keep changes focused and readable.
+4. Run:
 
-   Bot:
-   - `خفّف السرعة 🙂 جرّب بعد دقيقة.`
+```bash
+npm run typecheck
+```
 
-## Notes
+5. Open a PR with a clear description.
 
-- الذاكرة المؤقتة وrate-limit داخل الذاكرة فقط، لذلك سلوكهما best effort مع serverless cold starts.
-- لا توجد قاعدة بيانات.
-- المشروع يعمل مباشرة بعد تعبئة متغيرات البيئة وضبط webhook.
+## License
+
+Add a `LICENSE` file (recommended: MIT) to make reuse terms explicit for contributors and users.
