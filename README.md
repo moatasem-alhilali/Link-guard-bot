@@ -157,6 +157,14 @@ npx vercel --prod
 
 4. Run Telegram `setWebhook` using your production domain.
 
+### Build Settings Notes
+
+- This repository includes `vercel.json` with:
+- `buildCommand: npm run build`
+- `outputDirectory: public`
+- Node runtime for API functions: `nodejs20.x`
+- A minimal `public/index.html` is included to satisfy static output checks.
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
