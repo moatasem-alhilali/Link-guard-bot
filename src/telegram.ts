@@ -25,6 +25,9 @@ export interface TelegramUpdate {
   edited_channel_post?: TelegramMessage;
 }
 
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
+const TELEGRAM_SAFE_CHUNK_SIZE = 3800;
+
 export function getMessageFromUpdate(update: TelegramUpdate): TelegramMessage | null {
   return (
     update.message ??
@@ -91,5 +94,53 @@ export async function sendTelegramMessage(
 
       await sleep(250 * attempt);
     }
+  }
+}
+
+function splitByLength(value: string, chunkSize: number): string[] {
+  if (value.length <= chunkSize) {
+    return [value];
+  }
+
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  while (cursor < value.length) {
+    let end = Math.min(cursor + chunkSize, value.length);
+    if (end < value.length) {
+      const newlineIndex = value.lastIndexOf("\n", end);
+      if (newlineIndex > cursor + Math.floor(chunkSize * 0.6)) {
+        end = newlineIndex;
+      }
+    }
+
+    chunks.push(value.slice(cursor, end).trim());
+    cursor = end;
+
+    while (value[cursor] === "\n") {
+      cursor += 1;
+    }
+  }
+
+  return chunks.filter((chunk) => chunk.length > 0);
+}
+
+export async function sendTelegramMessageInChunks(
+  chatId: number | string,
+  text: string,
+  replyToMessageId?: number
+): Promise<void> {
+  if (text.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
+    await sendTelegramMessage(chatId, text, replyToMessageId);
+    return;
+  }
+
+  const chunks = splitByLength(text, TELEGRAM_SAFE_CHUNK_SIZE);
+  for (let index = 0; index < chunks.length; index += 1) {
+    await sendTelegramMessage(
+      chatId,
+      chunks[index],
+      index === 0 ? replyToMessageId : undefined
+    );
   }
 }

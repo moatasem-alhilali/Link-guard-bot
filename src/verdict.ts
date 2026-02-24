@@ -5,6 +5,7 @@ export interface VerdictResult {
   provider: string;
   reason: string;
   score?: string | number;
+  providerRaw?: unknown;
 }
 
 const VERDICT_LABELS_AR: Record<Verdict, string> = {

@@ -111,7 +111,8 @@ export async function checkWithGoogleSafeBrowsing(urlToCheck: string): Promise<V
       verdict: "SAFE",
       provider: providerDisplayNames.google,
       reason: "لم يتم العثور على تهديدات معروفة.",
-      score: 0
+      score: 0,
+      providerRaw: data
     };
   }
 
@@ -122,6 +123,7 @@ export async function checkWithGoogleSafeBrowsing(urlToCheck: string): Promise<V
     verdict: mapped.verdict,
     provider: providerDisplayNames.google,
     reason: mapped.reason,
-    score: matches.length
+    score: matches.length,
+    providerRaw: data
   };
 }

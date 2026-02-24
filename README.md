@@ -197,6 +197,7 @@ Each verdict reply includes:
 - Provider used
 - Short reason
 - Score (if available)
+- Raw provider JSON (when available)
 
 Example:
 

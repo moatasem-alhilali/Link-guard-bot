@@ -8,6 +8,18 @@ interface FormatVerdictInput {
   fromCache?: boolean;
 }
 
+function stringifyRawProviderData(raw: unknown): string | null {
+  if (raw === undefined) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(raw, null, 2);
+  } catch {
+    return String(raw);
+  }
+}
+
 export function formatVerdictMessage(input: FormatVerdictInput): string {
   const reason = input.fromCache
     ? `${input.result.reason} (نتيجة من الذاكرة المؤقتة)`
@@ -17,12 +29,20 @@ export function formatVerdictMessage(input: FormatVerdictInput): string {
     ? "غير متاحة"
     : String(input.result.score);
 
-  return [
+  const lines = [
     `النتيجة: ${verdictToArabicLabel(input.result.verdict)}`,
     `الرابط الأصلي: ${input.originalUrl}`,
     `الرابط المعياري: ${input.normalizedUrl}`,
     `المزوّد: ${input.result.provider}`,
     `السبب: ${reason}`,
     `الدرجة: ${score}`
-  ].join("\n");
+  ];
+
+  const rawData = stringifyRawProviderData(input.result.providerRaw);
+  if (rawData !== null) {
+    lines.push("بيانات المزود (raw JSON):");
+    lines.push(rawData);
+  }
+
+  return lines.join("\n");
 }

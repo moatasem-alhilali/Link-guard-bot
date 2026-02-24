@@ -7,7 +7,7 @@ import { rateLimiter } from "../../src/rateLimit";
 import {
   getMessageFromUpdate,
   getMessageText,
-  sendTelegramMessage,
+  sendTelegramMessageInChunks,
   type TelegramUpdate
 } from "../../src/telegram";
 import { extractFirstUrl, normalizeAndValidateUrl } from "../../src/urlUtils";
@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const text = getMessageText(message);
 
   if (/^\/start\b/i.test(text)) {
-    await sendTelegramMessage(chatId, START_MESSAGE, message.message_id);
+    await sendTelegramMessageInChunks(chatId, START_MESSAGE, message.message_id);
     res.status(200).json({ ok: true });
     return;
   }
@@ -97,14 +97,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const limiterKey = String(message.from?.id ?? chatId);
   const rateResult = rateLimiter.consume(limiterKey);
   if (!rateResult.allowed) {
-    await sendTelegramMessage(chatId, RATE_LIMIT_MESSAGE, message.message_id);
+    await sendTelegramMessageInChunks(chatId, RATE_LIMIT_MESSAGE, message.message_id);
     res.status(200).json({ ok: true });
     return;
   }
 
   const originalUrl = extractFirstUrl(text);
   if (!originalUrl) {
-    await sendTelegramMessage(chatId, NO_URL_MESSAGE, message.message_id);
+    await sendTelegramMessageInChunks(chatId, NO_URL_MESSAGE, message.message_id);
     res.status(200).json({ ok: true });
     return;
   }
@@ -112,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const normalized = await normalizeAndValidateUrl(originalUrl);
   if (!normalized.valid) {
     if (!normalized.blockReason) {
-      await sendTelegramMessage(chatId, NO_URL_MESSAGE, message.message_id);
+      await sendTelegramMessageInChunks(chatId, NO_URL_MESSAGE, message.message_id);
       res.status(200).json({ ok: true });
       return;
     }
@@ -123,14 +123,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       normalizedUrl: normalized.normalizedUrl ?? originalUrl,
       result: blockedResult
     });
-    await sendTelegramMessage(chatId, blockedResponse, message.message_id);
+    await sendTelegramMessageInChunks(chatId, blockedResponse, message.message_id);
     res.status(200).json({ ok: true });
     return;
   }
 
   const normalizedUrl = normalized.normalizedUrl;
   if (!normalizedUrl) {
-    await sendTelegramMessage(chatId, PROVIDER_FAILURE_MESSAGE, message.message_id);
+    await sendTelegramMessageInChunks(chatId, PROVIDER_FAILURE_MESSAGE, message.message_id);
     res.status(200).json({ ok: true });
     return;
   }
@@ -150,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       verdictCache.set(cacheKey, result);
     } catch (error) {
       console.error("Provider check failed:", error);
-      await sendTelegramMessage(chatId, PROVIDER_FAILURE_MESSAGE, message.message_id);
+      await sendTelegramMessageInChunks(chatId, PROVIDER_FAILURE_MESSAGE, message.message_id);
       res.status(200).json({ ok: true });
       return;
     }
@@ -163,6 +163,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     fromCache
   });
 
-  await sendTelegramMessage(chatId, responseText, message.message_id);
+  await sendTelegramMessageInChunks(chatId, responseText, message.message_id);
   res.status(200).json({ ok: true });
 }
