@@ -8,16 +8,20 @@ interface FormatVerdictInput {
   fromCache?: boolean;
 }
 
-function stringifyRawProviderData(raw: unknown): string | null {
-  if (raw === undefined) {
-    return null;
+function getUserAdvice(verdict: VerdictResult["verdict"]): string {
+  if (verdict === "SAFE") {
+    return "يمكنك المتابعة بحذر، وتأكد دائمًا من مصدر الرابط.";
   }
 
-  try {
-    return JSON.stringify(raw, null, 2);
-  } catch {
-    return String(raw);
+  if (verdict === "SUSPICIOUS") {
+    return "لا تدخل أي بيانات شخصية أو مالية قبل التحقق من الجهة المرسلة.";
   }
+
+  if (verdict === "MALICIOUS") {
+    return "تجنب فتح الرابط فورًا واحذفه، لأنه قد يسبب ضررًا لحسابك أو جهازك.";
+  }
+
+  return "تعامل مع الرابط بحذر شديد وحاول التحقق منه لاحقًا.";
 }
 
 export function formatVerdictMessage(input: FormatVerdictInput): string {
@@ -29,20 +33,13 @@ export function formatVerdictMessage(input: FormatVerdictInput): string {
     ? "غير متاحة"
     : String(input.result.score);
 
-  const lines = [
+  return [
     `النتيجة: ${verdictToArabicLabel(input.result.verdict)}`,
+    `ملخص الفحص: ${reason}`,
     `الرابط الأصلي: ${input.originalUrl}`,
     `الرابط المعياري: ${input.normalizedUrl}`,
     `المزوّد: ${input.result.provider}`,
-    `السبب: ${reason}`,
-    `الدرجة: ${score}`
-  ];
-
-  const rawData = stringifyRawProviderData(input.result.providerRaw);
-  if (rawData !== null) {
-    lines.push("بيانات المزود (raw JSON):");
-    lines.push(rawData);
-  }
-
-  return lines.join("\n");
+    `درجة الخطورة: ${score}`,
+    `النصيحة: ${getUserAdvice(input.result.verdict)}`
+  ].join("\n");
 }

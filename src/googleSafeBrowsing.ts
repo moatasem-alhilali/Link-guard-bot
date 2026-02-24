@@ -13,6 +13,13 @@ interface GoogleSafeBrowsingResponse {
 const GOOGLE_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find";
 const MALICIOUS_THREATS = new Set(["MALWARE", "POTENTIALLY_HARMFUL_APPLICATION"]);
 const SUSPICIOUS_THREATS = new Set(["SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"]);
+const THREAT_LABEL_AR: Record<string, string> = {
+  MALWARE: "برمجيات خبيثة",
+  POTENTIALLY_HARMFUL_APPLICATION: "تطبيق ضار محتمل",
+  SOCIAL_ENGINEERING: "تصيّد/خداع",
+  UNWANTED_SOFTWARE: "برمجيات غير مرغوبة",
+  UNKNOWN: "تهديد غير معروف"
+};
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,24 +67,27 @@ async function postWithRetry<T>(url: string, body: unknown): Promise<T> {
 function mapGoogleThreatsToVerdict(threatTypes: string[]): { verdict: Verdict; reason: string } {
   const hasMalicious = threatTypes.some((type) => MALICIOUS_THREATS.has(type));
   const hasSuspicious = threatTypes.some((type) => SUSPICIOUS_THREATS.has(type));
+  const threatLabels = threatTypes.map((type) => THREAT_LABEL_AR[type] ?? THREAT_LABEL_AR.UNKNOWN);
+  const uniqueThreatLabels = [...new Set(threatLabels)];
+  const details = uniqueThreatLabels.join("، ");
 
   if (hasMalicious) {
     return {
       verdict: "MALICIOUS",
-      reason: `تم رصد تهديدات خطرة: ${threatTypes.join(", ")}`
+      reason: `تم اكتشاف تهديدات عالية الخطورة على الرابط. نوع الخطر: ${details}.`
     };
   }
 
   if (hasSuspicious) {
     return {
       verdict: "SUSPICIOUS",
-      reason: `تم رصد مؤشرات مشبوهة: ${threatTypes.join(", ")}`
+      reason: `تم اكتشاف مؤشرات مشبوهة على الرابط. نوع المؤشر: ${details}.`
     };
   }
 
   return {
     verdict: "SUSPICIOUS",
-    reason: `تم رصد تهديد غير معروف النوع: ${threatTypes.join(", ")}`
+    reason: `تم اكتشاف مؤشر غير معروف على الرابط. نوع المؤشر: ${details}.`
   };
 }
 
@@ -111,8 +121,7 @@ export async function checkWithGoogleSafeBrowsing(urlToCheck: string): Promise<V
       verdict: "SAFE",
       provider: providerDisplayNames.google,
       reason: "لم يتم العثور على تهديدات معروفة.",
-      score: 0,
-      providerRaw: data
+      score: 0
     };
   }
 
@@ -123,7 +132,6 @@ export async function checkWithGoogleSafeBrowsing(urlToCheck: string): Promise<V
     verdict: mapped.verdict,
     provider: providerDisplayNames.google,
     reason: mapped.reason,
-    score: matches.length,
-    providerRaw: data
+    score: matches.length
   };
 }
