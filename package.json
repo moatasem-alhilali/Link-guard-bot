@@ -1,0 +1,23 @@
+{
+  "name": "linkguard-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram URL check bot for Vercel serverless webhook",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev --listen 3000",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vercel/node": "^5.1.10",
+    "typescript": "^5.8.2",
+    "vercel": "^39.3.0"
+  }
+}
